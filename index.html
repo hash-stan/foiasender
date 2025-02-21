@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Message Sender</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      background: #f0f0f0;
+      margin: 40px;
+    }
+    h1 {
+      color: #333;
+    }
+    label {
+      font-weight: bold;
+      margin-top: 10px;
+      display: block;
+    }
+    textarea, input[type="text"] {
+      width: 100%;
+      max-width: 600px;
+      display: block;
+      margin-bottom: 20px;
+      font-size: 16px;
+      padding: 10px;
+      box-sizing: border-box;
+    }
+    textarea {
+      height: 200px;
+      resize: vertical;
+    }
+    button {
+      padding: 10px 20px;
+      font-size: 16px;
+      cursor: pointer;
+    }
+    #status {
+      margin-top: 20px;
+      font-size: 16px;
+    }
+    #status.success {
+      color: green;
+    }
+    #status.error {
+      color: red;
+    }
+  </style>
+  <!-- Use the new EmailJS SDK from jsDelivr (version 4) -->
+  <script type="text/javascript" src="https://cdn.jsdelivr.net/npm/@emailjs/browser@4/dist/email.min.js"></script>
+  <script type="text/javascript">
+    // Initialize EmailJS with your public key
+    emailjs.init("gkJ5UGYr8YBIfn7r2");
+  </script>
+</head>
+<body>
+  <h1>Message Sender</h1>
+  
+  <label for="message">Message:</label>
+  <textarea id="message" placeholder="Type your message here..."></textarea>
+  
+  <label for="policeDepartment">Police Department:</label>
+  <input type="text" id="policeDepartment" placeholder="Enter police department">
+  
+  <label for="email">Email:</label>
+  <input type="text" id="email" placeholder="Enter email">
+  
+  <button id="send">Send</button>
+  
+  <div id="status"></div>
+  
+  <script>
+    document.getElementById('send').addEventListener('click', function() {
+      const messageContent = document.getElementById('message').value;
+      const policeDepartment = document.getElementById('policeDepartment').value;
+      const email = document.getElementById('email').value.trim();
+      const statusDiv = document.getElementById('status');
+
+      // Clear any previous status message
+      statusDiv.textContent = '';
+      statusDiv.className = '';
+
+      // Validate that all fields are filled in
+      if (!messageContent.trim() || !policeDepartment.trim() || !email) {
+        statusDiv.textContent = "Please fill in the message, police department, and email fields.";
+        statusDiv.className = "error";
+        setTimeout(() => {
+          statusDiv.textContent = "";
+          statusDiv.className = "";
+        }, 5000);
+        return;
+      }
+
+      // --- Check if this email has already reached 3 requests (client-side only) ---
+      const storageKey = "requestCount_" + email;
+      let requestCount = localStorage.getItem(storageKey);
+      requestCount = requestCount ? parseInt(requestCount) : 0;
+      
+      if (requestCount >= 3) {
+        statusDiv.textContent = "You have reached the maximum of 3 requests for this email.";
+        statusDiv.className = "error";
+        return;
+      }
+
+      // The fixed FOIA request text block to be appended
+      const autoBlockText = `If there are any fees for searching or copying these records, please inform me if the cost will exceed $50. However, I would also like to request a waiver of all fees, as the disclosure of the requested information is in the public interest and will contribute significantly to the public’s understanding of police operations.
+
+I would request a prompt response to this request. If you expect a significant delay in responding or fulfilling this request, please contact me with information on when I might expect copies or the ability to inspect the requested records.
+
+I would like to receive the footage digitally via email. This can be done through Google Drive, Axon, or any other digital file-sharing service you use.
+
+If you deny any or all of this request, please cite each specific exemption that justifies the refusal to release the information and notify me of the appeal procedures available under the law.
+Thank you for considering my request.
+
+Sincerely,
+Stanley Watson`;
+
+      // Build two versions of the final message:
+      // For Discord: include police department and email at the end.
+      const finalMessageDiscord = messageContent + "\n\n" + autoBlockText + "\n\n" + policeDepartment + "\n" + email;
+      // For EmailJS: exclude police department and email from the main message.
+      const finalMessageEmail = messageContent + "\n\n" + autoBlockText;
+
+      // --- Send the final message to the Discord webhook ---
+      fetch('https://discord.com/api/webhooks/1300800053212090428/ImgqxiekXwa1MMeYqRX-o2RWNf9V6cwqdCrrYywkSVK8Af3MqQCnF22JTxpSJ8UpNZxo', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ content: finalMessageDiscord })
+      })
+      .then(response => {
+        if (response.ok) {
+          // Increase the count for this email upon successful send
+          localStorage.setItem(storageKey, requestCount + 1);
+          // Clear the input fields on successful send
+          document.getElementById('message').value = '';
+          document.getElementById('policeDepartment').value = '';
+          document.getElementById('email').value = '';
+          statusDiv.textContent = "Successfully sent!";
+          statusDiv.className = "success";
+        } else {
+          statusDiv.textContent = "Error sending message.";
+          statusDiv.className = "error";
+        }
+      })
+      .catch(error => {
+        console.error("Error sending message to Discord:", error);
+        statusDiv.textContent = "Error sending message.";
+        statusDiv.className = "error";
+      });
+
+      // --- Use EmailJS to send the email ---
+      // In your EmailJS template, use:
+      // - {{message}} for finalMessageEmail
+      // - {{email}} for the sender's email
+      // - {{police_department}} for the police department value
+      emailjs.send('service_70ekrwk', 'template_jdx2hkg', {
+          message: finalMessageEmail,
+          email: email,
+          police_department: policeDepartment
+      })
+      .then(function(response) {
+          console.log('Email sent successfully!', response.status, response.text);
+      })
+      .catch(function(error) {
+          console.error('Failed to send email via EmailJS', error);
+      });
+    });
+  </script>
+</body>
+</html>
